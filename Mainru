@@ -1,0 +1,77 @@
+import requests
+import telebot
+from flask import Flask
+from threading import Thread
+
+# ===== CONFIG =====
+API_KEY = "c4dbb316a626f3b4121503d0899ef6b1"
+BOT_TOKEN = "7839650297:AAFZMTqSfvilfuluAldaVHH5TKoRN8eXcIw"
+ADMIN_ID = 6911022455
+GOSMM_URL = "https://gosmm.uz/api/v2"
+
+bot = telebot.TeleBot(BOT_TOKEN)
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot ishlayapti!"
+
+def run():
+    app.run(host="0.0.0.0", port=8080)
+
+def keep_alive():
+    from threading import Thread
+    t = Thread(target=run)
+    t.start()
+
+@bot.message_handler(commands=['start'])
+def start(msg):
+    bot.send_message(msg.chat.id,
+        "👋 Assalomu alaykum!\n"
+        "Instagram nakrutka botiga xush kelibsiz.\n\n"
+        "Xizmatlar:\n"
+        "1️⃣ Obunachi\n"
+        "2️⃣ Layk\n"
+        "3️⃣ Ko‘rish\n\n"
+        "Buyurtma berish uchun /order yozing."
+    )
+
+@bot.message_handler(commands=['order'])
+def order(msg):
+    bot.send_message(msg.chat.id, "Xizmat ID kiriting (masalan: 1):")
+    bot.register_next_step_handler(msg, get_service_id)
+
+def get_service_id(msg):
+    service_id = msg.text
+    bot.send_message(msg.chat.id, "Instagram linkini kiriting:")
+    bot.register_next_step_handler(msg, get_link, service_id)
+
+def get_link(msg, service_id):
+    link = msg.text
+    bot.send_message(msg.chat.id, "Miqdor kiriting:")
+    bot.register_next_step_handler(msg, create_order, service_id, link)
+
+def create_order(msg, service_id, link):
+    amount = msg.text
+    payload = {
+        "key": API_KEY,
+        "action": "add",
+        "service": service_id,
+        "link": link,
+        "quantity": amount
+    }
+    r = requests.post(GOSMM_URL, data=payload).json()
+    if "order" in r:
+        bot.send_message(msg.chat.id, f"✅ Buyurtma qabul qilindi!\nOrder ID: {r['order']}")
+    else:
+        bot.send_message(msg.chat.id, f"❌ Xatolik:\n{r}")
+
+@bot.message_handler(commands=['balance'])
+def balance(msg):
+    if msg.chat.id != ADMIN_ID:
+        return bot.send_message(msg.chat.id, "🚫 Siz admin emassiz!")
+    r = requests.post(GOSMM_URL, data={"key": API_KEY, "action": "balance"}).json()
+    bot.send_message(msg.chat.id, f"💰 Balans: {r['balance']} {r['currency']}")
+
+keep_alive()
+bot.infinity_polling()
